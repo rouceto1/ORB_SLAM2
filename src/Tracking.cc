@@ -317,7 +317,8 @@ void Tracking::Track()
                 }
             }
             else
-            {
+            {	//Reset after lost
+               // mpSystem->Reset();
                 bOK = Relocalization();
             }
         }
