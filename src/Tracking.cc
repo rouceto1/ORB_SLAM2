@@ -318,8 +318,8 @@ void Tracking::Track()
             }
             else
             {	//Reset after lost
-               // mpSystem->Reset();
-                bOK = Relocalization();
+			mpSystem->Reset();
+                	bOK = Relocalization();
             }
         }
         else
@@ -1533,6 +1533,50 @@ void Tracking::Reset()
     mpKeyFrameDB->clear();
     cout << " done" << endl;
 
+    // Clear Map (this erase MapPoints and KeyFrames)
+    mpMap->clear();
+
+    KeyFrame::nNextId = 0;
+    Frame::nNextId = 0;
+    mState = NO_IMAGES_YET;
+
+    if(mpInitializer)
+    {
+        delete mpInitializer;
+        mpInitializer = static_cast<Initializer*>(NULL);
+    }
+
+    mlRelativeFramePoses.clear();
+    mlpReferences.clear();
+    mlFrameTimes.clear();
+    mlbLost.clear();
+
+    if(mpViewer)
+        mpViewer->Release();
+}
+void Tracking::ResetLoad()
+{
+
+    cout << "System Reseting" << endl;
+    if(mpViewer)
+    {
+        mpViewer->RequestStop();
+        while(!mpViewer->isStopped())
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(3000));
+        }
+    }
+
+
+    // Reset Loop Closing
+    cout << "Reseting Loop Closing...";
+    mpLoopClosing->RequestReset();
+    cout << " done" << endl;
+
+    // Clear BoW Database
+    cout << "Reseting Database...";
+    mpKeyFrameDB->clear();
+    cout << " done" << endl;
     // Clear Map (this erase MapPoints and KeyFrames)
     mpMap->clear();
 

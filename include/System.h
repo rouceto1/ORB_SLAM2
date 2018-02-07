@@ -80,7 +80,7 @@ public:
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
     // Returns the camera pose (empty if tracking fails).
     cv::Mat TrackMonocular(const cv::Mat &im, const double &timestamp);
-
+    vector<cv::Mat> LoadedMapKeyFrames();
     // This stops local mapping thread (map building) and performs only camera tracking.
     void ActivateLocalizationMode();
     // This resumes local mapping thread and performs SLAM again.
@@ -120,7 +120,9 @@ public:
     int GetTrackingState();
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
-
+    cv::Mat GetCameraCoordinates();
+    bool TrackingState();
+    int GetNumberOfMap();
 private:
     // Save/Load functions
     void SaveMap(const string &filename);

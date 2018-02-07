@@ -115,7 +115,7 @@ public:
     bool mbOnlyTracking;
 
     void Reset();
-
+    void ResetLoad();
 protected:
 
     // Main tracking function. It is independent of the input sensor.

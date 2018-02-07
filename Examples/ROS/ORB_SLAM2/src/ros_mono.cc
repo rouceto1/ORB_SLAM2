@@ -26,13 +26,17 @@
 
 #include<ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
-
+#include<geometry_msgs/Pose.h>
 #include<opencv2/core/core.hpp>
-
+#include<math.h>
 #include"../../../include/System.h"
-
+#include<std_msgs/Int32.h>
 using namespace std;
-
+geometry_msgs::Pose pose;
+ros::Publisher cam_pub_;
+ros::Publisher map_pub_;
+vector<cv::Mat> poses;
+int numOfMap;
 class ImageGrabber
 {
 public:
@@ -62,7 +66,8 @@ int main(int argc, char **argv)
 
     ros::NodeHandle nodeHandler;
     ros::Subscriber sub = nodeHandler.subscribe("/camera/image_raw", 1, &ImageGrabber::GrabImage,&igb);
-
+    cam_pub_ = nodeHandler.advertise<geometry_msgs::Pose>("orbSlam/cameraRelativePose", 1);
+    map_pub_ = nodeHandler.advertise<std_msgs::Int32>("/orbSlam/mapNumber",1);
     ros::spin();
 
     // Stop all threads
@@ -70,7 +75,6 @@ int main(int argc, char **argv)
 
     // Save camera trajectory
     SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
-
     ros::shutdown();
 
     return 0;
@@ -78,19 +82,37 @@ int main(int argc, char **argv)
 
 void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
 {
-    // Copy the ros image message to cv::Mat.
-    cv_bridge::CvImageConstPtr cv_ptr;
-    try
-    {
-        cv_ptr = cv_bridge::toCvShare(msg);
-    }
-    catch (cv_bridge::Exception& e)
-    {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-        return;
-    }
+	// Copy the ros image message to cv::Mat.
+	cv_bridge::CvImageConstPtr cv_ptr;
+	try
+	{
+		cv_ptr = cv_bridge::toCvShare(msg);
+	}
+	catch (cv_bridge::Exception& e)
+	{
+		ROS_ERROR("cv_bridge exception: %s", e.what());
+		return;
+	}
 
-    mpSLAM->TrackMonocular(cv_ptr->image,cv_ptr->header.stamp.toSec());
+	
+	mpSLAM->TrackMonocular(cv_ptr->image,cv_ptr->header.stamp.toSec());
+
+
+	if(!mpSLAM->GetCameraCoordinates().empty()){
+	cv::Mat cameraPose=mpSLAM->GetCameraCoordinates(); 
+	pose.position.x=cameraPose.at<double>(0,3);
+	pose.position.y=cameraPose.at<double>(1,3);
+	pose.position.z=cameraPose.at<double>(2,3);
+
+	//Convert rotation matrix into quaternion
+	pose.orientation.w=sqrt(cameraPose.at<double>(0,0)+cameraPose.at<double>(1,1)+cameraPose.at<double>(2,2)+1)/2;
+	double W =4*sqrt(cameraPose.at<double>(0,0)+cameraPose.at<double>(1,1)+cameraPose.at<double>(2,2)+1)/2;
+	pose.orientation.x=(cameraPose.at<double>(2,1)-cameraPose.at<double>(1,2))/W;
+	pose.orientation.y=(cameraPose.at<double>(0,2)-cameraPose.at<double>(2,0))/W;
+	pose.orientation.x=(cameraPose.at<double>(1,0)-cameraPose.at<double>(0,1))/W;
+	cam_pub_.publish(pose);
+	numOfMap=mpSLAM->GetNumberOfMap();	
+	map_pub_.publish(numOfMap);	
+	}
 }
-
 
