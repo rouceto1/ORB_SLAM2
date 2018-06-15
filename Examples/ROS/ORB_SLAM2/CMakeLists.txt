@@ -63,7 +63,20 @@ rosbuild_add_executable(Mono
 src/ros_mono.cc
 )
 
+rosbuild_add_executable(carrot_node
+src/carrotController.cpp
+)
 target_link_libraries(Mono
+${LIBS}
+)
+
+target_link_libraries(carrot_node
+${LIBS}
+)
+rosbuild_add_executable(carrot_drive
+src/carrotDrive.cpp
+)
+target_link_libraries(carrot_drive
 ${LIBS}
 )
 

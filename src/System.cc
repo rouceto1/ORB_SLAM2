@@ -309,52 +309,47 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
 		{
 			cv::Mat cameraPose = mpMapDrawer->GetCurrentCameraPose();
 			double  distCurrent = sqrt(pow(cameraPose.at<float>(0,3),2)+pow(cameraPose.at<float>(1,3),2)+pow(cameraPose.at<float>(2,3),2))+0.1; 
-			cout << "Distance Current " << distCurrent << " Loaded" << distLoad << endl;
+			//cout << "Distance Current " << distCurrent << " Loaded" << distLoad << endl;
 			if(distCurrent > distLoad){
-				mpTracker->ResetLoad();
+				unique_lock<mutex> lock(mMutexReset);
+			//	mpTracker->ResetLoad();
 				std::this_thread::sleep_for(std::chrono::microseconds(1000));
 				numOfMaps++;
 				sprintf(fileName,"%i%s",numOfMaps,mapfile.c_str());
 				if (LoadMap(fileName))
 				{
 					bool bReuseMap=true;
-
 					std::this_thread::sleep_for(std::chrono::microseconds(1000));
 					//Create Drawers. These are used by the Viewer
-			//		mpFrameDrawer = new FrameDrawer(mpMap, bReuseMap);p
+		//			mpFrameDrawer = new FrameDrawer(mpMap, bReuseMap);
 					mpMapDrawer = new MapDrawer(mpMap, settings);
-					cout << " 2" << endl;
+			//		cout << " 2" << endl;
 					//Initialize the Tracking thread
 					//(it will live in the main thread of execution, the one that called this constructor)
 					mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
 							mpMap, mpKeyFrameDatabase, settings, mSensor, bReuseMap);
-					cout << " 3" << endl;
-///	unique_lock<mutex> lock2(mMutexState);
-//	mTrackingState = mpTracker->mState;
-//	mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
-//	mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
+			//		cout << " 3" << endl;
 					//Initialize the Local Mapping thread and launch
 					mpLocalMapper = new LocalMapping(mpMap, mSensor==MONOCULAR);
 		//			mptLocalMapping = new thread(&ORB_SLAM2::LocalMapping::Run,mpLocalMapper);
-					cout << "4 " << endl;
+			//		cout << "4 " << endl;
 					//Initialize the Loop Closing thread and launch
 					mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR);
 				//	mptLoopClosing = new thread(&ORB_SLAM2::LoopClosing::Run, mpLoopCloser);
-					cout << " 5" << endl;
+			//		cout << " 5" << endl;
 					//Initialize the Viewer thread and launch
 					mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,settings, bReuseMap);
 					mpTracker->SetViewer(mpViewer);
-					cout << "6" << endl;
+			//		cout << "6" << endl;
 					//Set pointers between threads
 					mpTracker->SetLocalMapper(mpLocalMapper);
 					mpTracker->SetLoopClosing(mpLoopCloser);
-					cout << "7" << endl;	
+			//		cout << "7" << endl;	
 					mpLocalMapper->SetTracker(mpTracker);
 					mpLocalMapper->SetLoopCloser(mpLoopCloser);
-					cout << "8" << endl;
+			//		cout << "8" << endl;
 					mpLoopCloser->SetTracker(mpTracker);
 					mpLoopCloser->SetLocalMapper(mpLocalMapper);
-
 					mpTracker->InformOnlyTracking(true);
 					distCurrent=0;
 
@@ -381,7 +376,14 @@ int System::GetNumberOfMap()
 cv::Mat System::GetCameraCoordinates()
 {
 	unique_lock<mutex> lock2(mMutexState);
-	return mpMapDrawer->GetCurrentCameraPose();
+	
+	return mpTracker->mCurrentFrame.GetCameraCenter();
+}
+cv::Mat System::GetCameraRotate()
+{
+	unique_lock<mutex> lock2(mMutexState);
+	return mpTracker->mCurrentFrame.GetRotationInverse();
+
 }
 bool System::TrackingState()
 {
@@ -439,13 +441,16 @@ void System::Shutdown()
 	}
 	if(mpViewer)
 		pangolin::BindToContext("ORB-SLAM2: Map Viewer");
-	if (is_save_map)
+	if (is_save_map){
 
 		if(!mpTracker->mbOnlyTracking){
-			SaveMap(fileName);
-			sprintf(fileTrajectory,"%iKeyFrameTrajectory.txt",numOfMaps);
-			SaveKeyFrameTrajectoryTUM(fileTrajectory);
+			if(!mpMap->GetAllKeyFrames().empty()){
+				SaveMap(fileName);
+				sprintf(fileTrajectory,"%iKeyFrameTrajectory.txt",numOfMaps);
+				SaveKeyFrameTrajectoryTUM(fileTrajectory);
+			}
 		}
+	}
 }
 
 
@@ -516,16 +521,18 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
 
     vector<KeyFrame*> vpKFs = mpMap->GetAllKeyFrames();
     sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
-
+    
     // Transform all keyframes so that the first keyframe is at the origin.
     // After a loop closure the first keyframe might not be at the origin.
     //cv::Mat Two = vpKFs[0]->GetPoseInverse();
-
+    char keyF[100];
     ofstream f;
     f.open(filename.c_str());
     f << fixed;
+    sprintf(keyF,"%iKeyFrameTrajectory.yaml",numOfMaps);
+    cv::FileStorage fsp(keyF, cv::FileStorage::WRITE); 
 
-    for(size_t i=0; i<vpKFs.size(); i++)
+    for(unsigned int i=0; i<vpKFs.size(); i++)
     {
         KeyFrame* pKF = vpKFs[i];
 
@@ -533,15 +540,19 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
 
         if(pKF->isBad())
             continue;
-
         cv::Mat R = pKF->GetRotation().t();
         vector<float> q = Converter::toQuaternion(R);
         cv::Mat t = pKF->GetCameraCenter();
+	char keyN[100];
+ 	sprintf(keyN,"KeyFrame%i",i);   	
+	write(fsp,keyN,pKF->GetCameraCenter());
         f << setprecision(6) << pKF->mTimeStamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
 
     }
-
+    int num=vpKFs.size();
+    write(fsp,"NumberOfKeyFrames", num);
+    fsp.release(); 	
     f.close();
     cout << endl << "trajectory saved!" << endl;
 }

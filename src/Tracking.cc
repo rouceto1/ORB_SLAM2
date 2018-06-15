@@ -508,7 +508,6 @@ void Tracking::Track()
 
 }
 
-
 void Tracking::StereoInitialization()
 {
     if(mCurrentFrame.N>500)
@@ -1557,15 +1556,9 @@ void Tracking::Reset()
 void Tracking::ResetLoad()
 {
 
-    cout << "System Reseting" << endl;
-    if(mpViewer)
-    {
-        mpViewer->RequestStop();
-        while(!mpViewer->isStopped())
-        {
-            std::this_thread::sleep_for(std::chrono::microseconds(3000));
-        }
-    }
+    cout << "Loading next map" << endl;
+
+std::this_thread::sleep_for(std::chrono::microseconds(3000));
 
 
     // Reset Loop Closing
@@ -1579,7 +1572,7 @@ void Tracking::ResetLoad()
     cout << " done" << endl;
     // Clear Map (this erase MapPoints and KeyFrames)
     mpMap->clear();
-
+    cout << "Map cleared" << endl;
     KeyFrame::nNextId = 0;
     Frame::nNextId = 0;
     mState = NO_IMAGES_YET;

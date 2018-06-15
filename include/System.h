@@ -121,6 +121,7 @@ public:
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
     cv::Mat GetCameraCoordinates();
+    cv::Mat GetCameraRotate();
     bool TrackingState();
     int GetNumberOfMap();
 private:
