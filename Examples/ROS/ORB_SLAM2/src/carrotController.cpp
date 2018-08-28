@@ -46,6 +46,8 @@ bool localization;
 //Load desired map
 void LoadMap(int index)
 {
+	
+	std::cout << "loadMap in carrot contbroller" << std::endl;
 	loadedMap.clear();
 	sprintf(fileName,"%iKeyFrameTrajectory.yaml",index);
 	ROS_DEBUG("Loading %iKeyFrameTrajectory.yaml",index);
@@ -72,6 +74,7 @@ void localCallback(const std_msgs::Bool::ConstPtr& msg)
 //Find Carrot point pased on keyframes a current camera pose
 void cameraPoseCallback(const geometry_msgs::Pose::ConstPtr& msg)
 {
+	std::cout << "cameraPoseCallback in carrot contbroller" << std::endl;
 
 	if(localization){
 		if(wait){
@@ -85,7 +88,7 @@ void cameraPoseCallback(const geometry_msgs::Pose::ConstPtr& msg)
 			a_x=x_end;
 			a_z=z_end;
 
-			//Find point closer that carrot distance
+			//Find point closer that (than) carrot distance
 			dist=sqrt(pow(a_x-r_x,2)+pow(a_z-r_z,2));
 			while(dist>carrotDistance){
 				indexKey--;
@@ -128,6 +131,7 @@ void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 
 int main(int argc, char **argv)
 {
+	cout << "carrot controll ready" << endl;
 	ros::init(argc, argv, "Carrot");
 	ros::start();
 

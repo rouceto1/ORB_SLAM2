@@ -47,6 +47,7 @@ public:
 
     // Draw last processed frame.
     cv::Mat DrawFrame();
+	void setMap(Map *pMap);
 
 protected:
 

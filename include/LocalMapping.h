@@ -66,6 +66,7 @@ public:
 
     void RequestFinish();
     bool isFinished();
+    void SetMap ( Map *pMap);
 
     int KeyframesInQueue(){
         unique_lock<std::mutex> lock(mMutexNewKFs);
