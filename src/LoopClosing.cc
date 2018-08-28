@@ -625,9 +625,11 @@ void LoopClosing::RequestReset()
         {
         unique_lock<mutex> lock2(mMutexReset);
         if(!mbResetRequested)
+			cout << "Loop closing reset request satisfied " << mbResetRequested << endl;
             break;
         }
-        std::this_thread::sleep_for(std::chrono::microseconds(5000));
+        std::this_thread::sleep_for(std::chrono::microseconds(200000));
+        cout << "Loop closing reset request failed " << mbResetRequested << endl;
     }
 }
 
@@ -770,6 +772,9 @@ bool LoopClosing::isFinished()
 {
     unique_lock<mutex> lock(mMutexFinish);
     return mbFinished;
+}
+void LoopClosing::SetMap ( Map *pMap) {
+	mpMap = pMap;
 }
 
 

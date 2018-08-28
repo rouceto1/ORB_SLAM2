@@ -116,6 +116,8 @@ public:
 
     void Reset();
     void ResetLoad();
+    
+    void setMap(Map *pMap);
 protected:
 
     // Main tracking function. It is independent of the input sensor.

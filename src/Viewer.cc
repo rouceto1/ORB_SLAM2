@@ -56,7 +56,7 @@ void Viewer::Run()
     mbFinished = false;
     mbStopped = false;
 
-    pangolin::CreateWindowAndBind("ORB-SLAM2: Map Viewer",1024,768);
+    pangolin::CreateWindowAndBind("ORB-SLAM2: Map Viewer",400,300); //default 1024,768 -- sets window size of map wiever
 
     // 3D Mouse handler requires depth testing to be enabled
     glEnable(GL_DEPTH_TEST);
@@ -129,8 +129,10 @@ void Viewer::Run()
         mpMapDrawer->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph)
             mpMapDrawer->DrawKeyFrames(menuShowKeyFrames,menuShowGraph);
+        //cout << "we got mp:" ;
         if(menuShowPoints)
             mpMapDrawer->DrawMapPoints();
+         
 
         pangolin::FinishFrame();
 

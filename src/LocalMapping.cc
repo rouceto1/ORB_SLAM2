@@ -757,4 +757,9 @@ bool LocalMapping::isFinished()
     return mbFinished;
 }
 
+void LocalMapping::SetMap ( Map *pMap){
+	mpMap = pMap;
+	
+}
+
 } //namespace ORB_SLAM

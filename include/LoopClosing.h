@@ -79,6 +79,7 @@ public:
     void RequestFinish();
 
     bool isFinished();
+	void SetMap ( Map *pMap);
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

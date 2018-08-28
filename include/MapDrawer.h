@@ -45,6 +45,8 @@ public:
     void SetReferenceKeyFrame(KeyFrame *pKF);
     void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M);
     cv::Mat GetCurrentCameraPose();
+    void setMap(Map *pMap);
+    void DelteCurrentCammeraPose ();
 
 private:
 

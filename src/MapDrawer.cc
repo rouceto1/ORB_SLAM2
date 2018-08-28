@@ -43,6 +43,7 @@ MapDrawer::MapDrawer(Map* pMap, const string &strSettingPath):mpMap(pMap)
 
 void MapDrawer::DrawMapPoints()
 {
+	//cout << mpMap->MapPointsInMap() << endl; 
     const vector<MapPoint*> &vpMPs = mpMap->GetAllMapPoints();
     const vector<MapPoint*> &vpRefMPs = mpMap->GetReferenceMapPoints();
 
@@ -266,6 +267,15 @@ void MapDrawer::GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M)
     }
     else
         M.SetIdentity();
+}
+void MapDrawer::setMap(Map *pMap){
+	mpMap = pMap;
+	
+} 
+void MapDrawer::DelteCurrentCammeraPose ()
+{
+	cv::Mat temp;
+	mCameraPose = temp;
 }
 
 } //namespace ORB_SLAM

@@ -44,7 +44,7 @@ namespace ORB_SLAM2
 {
 
 Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Map *pMap, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, bool bReuseMap):
-    mState(NO_IMAGES_YET), mSensor(sensor), mbOnlyTracking(false), mbVO(false), mpORBVocabulary(pVoc),
+    mState(NO_IMAGES_YET), mSensor(sensor), mbOnlyTracking(true), mbVO(false), mpORBVocabulary(pVoc),
     mpKeyFrameDB(pKFDB), mpInitializer(static_cast<Initializer*>(NULL)), mpSystem(pSys), mpViewer(NULL),
     mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap), mnLastRelocFrameId(0)
 {
@@ -259,6 +259,7 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
         mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
     else
         mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
+        
 
     Track();
 
@@ -267,6 +268,7 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 
 void Tracking::Track()
 {
+	
     if(mState==NO_IMAGES_YET)
     {
         mState = NOT_INITIALIZED;
@@ -279,6 +281,7 @@ void Tracking::Track()
 
     if(mState==NOT_INITIALIZED)
     {
+		//cout << "once again how ofen do we initailize" << endl;
         if(mSensor==System::STEREO || mSensor==System::RGBD)
             StereoInitialization();
         else
@@ -297,6 +300,7 @@ void Tracking::Track()
         // Initial camera pose estimation using motion model or relocalization (if tracking is lost)
         if(!mbOnlyTracking)
         {
+//			cout << "wth we do here" << endl;
             // Local Mapping is activated. This is the normal behaviour, unless
             // you explicitly activate the "only tracking" mode.
 
@@ -473,7 +477,7 @@ void Tracking::Track()
         // Reset if the camera get lost soon after initialization
         if(mState==LOST)
         {
-            if(mpMap->KeyFramesInMap()<=5)
+            if(mpMap->KeyFramesInMap()<=3)
             {
                 cout << "Track lost soon after initialisation, reseting..." << endl;
                 mpSystem->Reset();
@@ -564,9 +568,11 @@ void Tracking::StereoInitialization()
 
 void Tracking::MonocularInitialization()
 {
-
+//	cout << "how often do we initialize" << endl;
+	
     if(!mpInitializer)
     {
+		//cout << "how often do we initialize i wonder" << endl;
         // Set Reference Frame
         if(mCurrentFrame.mvKeys.size()>100)
         {
@@ -978,9 +984,11 @@ bool Tracking::TrackLocalMap()
 
 bool Tracking::NeedNewKeyFrame()
 {
+	//cout << "do we at elast get here" << endl;
     if(mbOnlyTracking)
         return false;
-
+        
+	//cout << "do we at elast get here and then here" << endl;
     // If Local Mapping is freezed by a Loop Closure do not insert keyframes
     if(mpLocalMapper->isStopped() || mpLocalMapper->stopRequested())
         return false;
@@ -990,6 +998,7 @@ bool Tracking::NeedNewKeyFrame()
     // Do not insert keyframes if not enough frames have passed from last relocalisation
     if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && nKFs>mMaxFrames)
         return false;
+
 
     // Tracked MapPoints in the reference keyframe
     int nMinObs = 3;
@@ -1026,7 +1035,6 @@ bool Tracking::NeedNewKeyFrame()
 
     if(mSensor==System::MONOCULAR)
         thRefRatio = 0.9f;
-
     // Condition 1a: More than "MaxFrames" have passed from last keyframe insertion
     const bool c1a = mCurrentFrame.mnId>=mnLastKeyFrameId+mMaxFrames;
     // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
@@ -1558,7 +1566,7 @@ void Tracking::ResetLoad()
 
     cout << "Loading next map" << endl;
 
-std::this_thread::sleep_for(std::chrono::microseconds(3000));
+	std::this_thread::sleep_for(std::chrono::microseconds(100));
 
 
     // Reset Loop Closing
@@ -1571,7 +1579,7 @@ std::this_thread::sleep_for(std::chrono::microseconds(3000));
     mpKeyFrameDB->clear();
     cout << " done" << endl;
     // Clear Map (this erase MapPoints and KeyFrames)
-    mpMap->clear();
+    //mpMap->clear();
     cout << "Map cleared" << endl;
     KeyFrame::nNextId = 0;
     Frame::nNextId = 0;
@@ -1628,6 +1636,11 @@ void Tracking::ChangeCalibration(const string &strSettingPath)
 void Tracking::InformOnlyTracking(const bool &flag)
 {
     mbOnlyTracking = flag;
+}
+
+void Tracking::setMap(Map *pMap){
+	mpMap = pMap;
+	
 }
 
 

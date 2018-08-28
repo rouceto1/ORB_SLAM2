@@ -35,7 +35,7 @@ FrameDrawer::FrameDrawer(Map* pMap, bool bReuseMap):mpMap(pMap)
         mState=Tracking::LOST;
     else
         mState=Tracking::SYSTEM_NOT_READY;
-    mIm = cv::Mat(480,640,CV_8UC3, cv::Scalar(0,0,0));
+    mIm = cv::Mat(240,320,CV_8UC3, cv::Scalar(0,0,0));
 }
 
 cv::Mat FrameDrawer::DrawFrame()
@@ -145,8 +145,10 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
         int nKFs = mpMap->KeyFramesInMap();
         int nMPs = mpMap->MapPointsInMap();
         s << "KFs: " << nKFs << ", MPs: " << nMPs << ", Matches: " << mnTracked;
+        //cout << "we also got KF:" << nKFs << " and MP: " << nMPs<< endl;
         if(mnTrackedVO>0)
             s << ", + VO matches: " << mnTrackedVO;
+            
     }
     else if(nState==Tracking::LOST)
     {
@@ -202,5 +204,9 @@ void FrameDrawer::Update(Tracking *pTracker)
     }
     mState=static_cast<int>(pTracker->mLastProcessedState);
 }
+void FrameDrawer::setMap(Map *pMap){
+	mpMap = pMap;
+	
+} 
 
 } //namespace ORB_SLAM
