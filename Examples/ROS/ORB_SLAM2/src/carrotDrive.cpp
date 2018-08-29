@@ -74,12 +74,11 @@ float distanceTotalEvent=0;
 float distanceTravelled=0;
 float flipperPosition=0;
 bool userStop = false;
-bool localization;
+bool knownPosition;
 int mapNumberSave=1;
 int currentPanthNumber = 0;
 int mapNumber;
 int mapCount = 0;
-bool inMap=false;
 
 // work in progress varables:
 bool weShouldBeCapturingJoystick = false;
@@ -98,7 +97,9 @@ void joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
 
     ROS_DEBUG("Joystick pressed");
 
-    if ( cotrollerTest) {
+
+    /*Joystick debug code*/
+    if (cotrollerTest) {
         cout << "We recieved: " << endl<<
              "A B X Y LT RT L3 R3 s m  ↕  ↔" << endl
              << joy->buttons[A] <<  " "
@@ -126,6 +127,11 @@ void joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
 
 }
 
+/*Saves Path of given index.
+ *
+ * @param index Number of file to save
+ * @return
+*/
 void savePath(int index)
 {
     if(!path.empty()) {
@@ -143,25 +149,35 @@ void savePath(int index)
         cout << "done" << endl;
     }
     userStop = false;
-    inMap=false;
 }
 
-
+/*Detects if file of given name exists
+ *
+ * @param name of the file we wanna know exists
+ * @return true it exists, false if not
+*/
 bool fileExists (const std::string& name) {
     ifstream f(name.c_str());
     return f.good();
 }
+
+
+/*Loads Path of given index. Clears the last one if old existed and sets flag newFileLoaded to true
+ *
+ * @param index Number of file to load
+ * @return true if load was successfull, false if file dont exist or is unable to load
+*/
 bool loadPath(int index)
 {
     char fileName[1000];
     currentPanthNumber++;
     sprintf(fileName,"%iPathProfile.yaml",index);
-    if (!fileExists(fileName)) {
+    if (!fileExists(fileName)) { //check if we can even load this file
         cout << "Failed to load " << fileName << " you better make one" << endl;
         currentPanthNumber--;
         return false;
     }
-	
+
     ROS_DEBUG("Loading %iPathProfile.yaml",index);
     cout << "Loading path " << fileName;
     FileStorage fsp(fileName, FileStorage::READ);
@@ -180,8 +196,6 @@ bool loadPath(int index)
         forwardS.push_back(path[2*i]);
         angularS.push_back(path[2*i+1]);
     }
-    //cout << "we laodaed path " << fileName << endl;
-    inMap = false;
     newFileLoaded = true;
     return true;
 }
@@ -192,7 +206,6 @@ void mapCallback(const std_msgs::Int32::ConstPtr& msg)
     unique_lock<mutex> lock2(minMapState);
     mapNumber=msg->data;
     if (mapNumber == mapCount) {
-        inMap=true;
         mapCount++;
     } else {
         mapCount++;
@@ -201,16 +214,18 @@ void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 }
 void localCallback(const std_msgs::Bool::ConstPtr& msg)
 {
-    localization=msg->data;
-   // cout << localization << "  hej  " << msg->data <<endl;
+    knownPosition=msg->data;
 }
 
 
 int main(int argc, char **argv)
 {
-	cout << "carrot drive init.......";
-	usleep(400000);
+    cout << "carrot drive init.......";
+    usleep(1000000); //not needed if you dont start orbslam simulteniously
     cout << "ready" << endl;
+
+
+
     ros::init(argc, argv, "CarrotDrive");
     ros::start();
     ros::NodeHandle nh;
@@ -225,24 +240,23 @@ int main(int argc, char **argv)
     /* robot speed limits */
     nh.param("angularSpeed", maxAngularSpeed, 0.2);
     nh.param("forwardSpeed", maxForwardSpeed, 0.3);
-
     nh.param("forwardAcceleration", maxForwardAcceleration, 0.01);
 
-    vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmda",10000);
-    loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);  
+    vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmda",10000); //may not need this large buffer
+    loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);
     joy_sub_ = nh.subscribe<sensor_msgs::Joy>("/joy", 10, joyCallback);
     map_sub_ = nh.subscribe<std_msgs::Int32>("/orbSlam/mapNumber",1,mapCallback);
-	
+
     tf::TransformListener listener;
     weShouldBeCapturingJoystick = !loadPath(currentPanthNumber);
     while (ros::ok()) {
 
 
-		//std::cout << localization << "     "     <<  mapCallback  <<endl;
+
 
         if (weShouldBeCapturingJoystick) {
-            /* new save mode */
-            //cout << "are we at save mode" << endl;
+            /* Save mode */
+
             // this part calculates and publises to the twist topic so we know the direction we should be heading to
             forwardSpeed += forwardAcceleration;
             forwardSpeed = fmin(fmax(forwardSpeed,-maxForwardSpeed),maxForwardSpeed);
@@ -269,11 +283,8 @@ int main(int argc, char **argv)
 
 
         } else {
-            //now we should already have old file of this place in path
 
-            //we should find out if we should go by optical shit or joystick shit
-			
-            if (!localization) {
+            if (!knownPosition) { //we are checking if we know position in map
 
                 //Find Transform between robot and carrot point
                 tf::StampedTransform transform;
@@ -285,29 +296,29 @@ int main(int argc, char **argv)
                 }
                 catch (tf::TransformException &ex) {
                     ROS_ERROR("%s",ex.what());
-                    //ros::Duration(1.0).sleep();
+                    //ros::Duration(1.0).sleep();  //only slows down code
                     ros::spinOnce();
                     continue;
                 }
                 //Controlling the the angular and forward speed depending on the transform
                 twist.angular.z = 0.3 * transform.getOrigin().x();
                 twist.linear.x = 0.2 * sqrt(pow(transform.getOrigin().x(), 2) +	pow(transform.getOrigin().z(), 2));
-                vel_pub_.publish(twist);
+                vel_pub_.publish(twist); // publishing new angual and linear velociteis
             } else {
-                /* new load mode*/
+                /* Load mode*/
 
-                if (forwardS.size() == i ) {
+                if (forwardS.size() == i ) { //we load new map when we published all the previous ones
                     i = 0;
                     newFileLoaded = false;
                     loadPath(currentPanthNumber);
                 }
                 if (newFileLoaded) {
-                twist.linear.x=forwardS[i];
-                twist.angular.z=angularS[i];
-                vel_pub_.publish(twist);
-                i++;
-				}
-                //we should check what was the last path we loaded and if it is not the last map the main part is in we should load another
+                    twist.linear.x=forwardS[i];
+                    twist.angular.z=angularS[i];
+                    vel_pub_.publish(twist); //publishing old path
+                    i++;
+                }
+
             }
 
         }

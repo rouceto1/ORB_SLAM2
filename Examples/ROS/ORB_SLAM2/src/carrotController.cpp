@@ -43,25 +43,29 @@ bool wait=false;
 float r_x,r_z,r_y;
 bool localization;
 
-//Load desired map
+/*Loads map of given index for keyframes.
+ *
+ * @param index Number of fle to load
+ * @return
+*/
 void LoadMap(int index)
 {
-	
-	std::cout << "loadMap in carrot contbroller" << std::endl;
-	loadedMap.clear();
-	sprintf(fileName,"%iKeyFrameTrajectory.yaml",index);
-	ROS_DEBUG("Loading %iKeyFrameTrajectory.yaml",index);
-	FileStorage fs(fileName, FileStorage::READ);
-	if(fs.isOpened()){
-	fs["NumberOfKeyFrames"]>>numberOfKeyFrames;
-		for(int i=0;i<numberOfKeyFrames;i++){
-		Mat curr;
-		sprintf(keyFr,"KeyFrame%i",i);
-		fs[keyFr]>>curr;
-		loadedMap.push_back(curr);
-		}
-	}	
-	fs.release();
+
+    std::cout << "loadMap in carrot contbroller" << std::endl;
+    loadedMap.clear();
+    sprintf(fileName,"%iKeyFrameTrajectory.yaml",index);
+    ROS_DEBUG("Loading %iKeyFrameTrajectory.yaml",index);
+    FileStorage fs(fileName, FileStorage::READ);
+    if(fs.isOpened()) {
+        fs["NumberOfKeyFrames"]>>numberOfKeyFrames;
+        for(int i=0; i<numberOfKeyFrames; i++) {
+            Mat curr;
+            sprintf(keyFr,"KeyFrame%i",i);
+            fs[keyFr]>>curr;
+            loadedMap.push_back(curr);
+        }
+    }
+    fs.release();
 
 }
 //TODO pozice konce na zacatku
@@ -69,80 +73,83 @@ void LoadMap(int index)
 //Get state of Slam
 void localCallback(const std_msgs::Bool::ConstPtr& msg)
 {
-	localization=msg->data;
-	//cout << localization << "  hej  " << msg->data <<endl;
+    localization=msg->data;
+    //cout << localization << "  hej  " << msg->data <<endl;
 }
 //Find Carrot point pased on keyframes a current camera pose
 void cameraPoseCallback(const geometry_msgs::Pose::ConstPtr& msg)
 {
-	//std::cout << "cameraPoseCallback in carrot contbroller" << std::endl;
 
-	if(!localization){
-		if(wait){
-			r_x=msg->position.x;
-			r_y=msg->position.y;
-			r_z=msg->position.z;
-			indexKey=numberOfKeyFrames;
-			frame=loadedMap.back();
-			x_end=frame.at<float>(0,0);
-			z_end=frame.at<float>(0,2);
-			a_x=x_end;
-			a_z=z_end;
+    if(!localization) {
+        if(wait) { //we wait untill we load new map
+            r_x=msg->position.x;
+            r_y=msg->position.y;
+            r_z=msg->position.z;
+            indexKey=numberOfKeyFrames;
+            frame=loadedMap.back();
+            x_end=frame.at<float>(0,0);
+            z_end=frame.at<float>(0,2);
+            a_x=x_end;
+            a_z=z_end;
 
-			//Find point closer that (than) carrot distance
-			dist=sqrt(pow(a_x-r_x,2)+pow(a_z-r_z,2));
-			while(dist>carrotDistance){
-				indexKey--;
-				if(indexKey>-1){
-					frame=loadedMap[indexKey];
-					a_x=frame.at<float>(0,0);
-					a_z=frame.at<float>(0,2);
-					dist=sqrt(pow(a_x-r_x,2)+pow(a_z-r_z,2));
-				} else { 
-					frame=loadedMap.front();
-					a_x=frame.at<float>(0,0);
-					a_z=frame.at<float>(0,2);
-					dist=0;
-				}
-			}
-			fin=frame;
-			cout << "Carrot Point x: " << fin.at<float>(0,0) << " z: " << fin.at<float>(0,2) << endl;
-			static tf::TransformBroadcaster br;
-			tf::Transform transf;
-			//Get Coordinates system for Robot
-			transf.setOrigin(tf::Vector3(fin.at<float>(0,0),fin.at<float>(0,1),fin.at<float>(0,2)));
-			transf.setRotation(tf::Quaternion(0,0,0,1));
-			br.sendTransform(tf::StampedTransform(transf, ros::Time::now(), "World", "Carrot"));	
-		}	
-	}
+            //Find point closer that (than) carrot distance
+            dist=sqrt(pow(a_x-r_x,2)+pow(a_z-r_z,2));
+            while(dist>carrotDistance) {
+                indexKey--;
+                if(indexKey>-1) {
+                    frame=loadedMap[indexKey];
+                    a_x=frame.at<float>(0,0);
+                    a_z=frame.at<float>(0,2);
+                    dist=sqrt(pow(a_x-r_x,2)+pow(a_z-r_z,2));
+                } else {
+                    frame=loadedMap.front();
+                    a_x=frame.at<float>(0,0);
+                    a_z=frame.at<float>(0,2);
+                    dist=0;
+                }
+            }
+            fin=frame;
+            cout << "Carrot Point x: " << fin.at<float>(0,0) << " z: " << fin.at<float>(0,2) << endl;
+            static tf::TransformBroadcaster br;
+            tf::Transform transf;
+            //Get Coordinates system for Robot
+            transf.setOrigin(tf::Vector3(fin.at<float>(0,0),fin.at<float>(0,1),fin.at<float>(0,2)));
+            transf.setRotation(tf::Quaternion(0,0,0,1));
+            br.sendTransform(tf::StampedTransform(transf, ros::Time::now(), "World", "Carrot"));
+        }
+    }
 }
 
-//Returns Map in which the robot is 
+/*When map is changed in ORBSLAM it notifies here and detects if map has been changed
+ *
+*/
 void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 {
-	mapNumber=msg->data;
-	if(localization){
-		if(mapNumber!=mapChanged){
-			LoadMap(mapNumber);
-			wait=true;
-			mapChanged=mapNumber;
-			cout << "carrot is in map " << mapNumber <<endl;
-		}
-	}
+    mapNumber=msg->data;
+    if(localization) {
+        if(mapNumber!=mapChanged) {
+            LoadMap(mapNumber);
+            wait=true;
+            mapChanged=mapNumber;
+        }
+    }
 }
 
 int main(int argc, char **argv)
 {
-	cout << "carrot controll init.......";
-	usleep(400000);
+    cout << "carrot controll init.......";
+    usleep(1000000);  //not needed if you dont start orbslam simulteniously
     cout << "ready" << endl;
-	ros::init(argc, argv, "Carrot");
-	ros::start();
+    ros::init(argc, argv, "Carrot");
 
-	ros::NodeHandle nh;
-	cam_sub_ = nh.subscribe<geometry_msgs::Pose>("/orbSlam/cameraRelativePose", 1, cameraPoseCallback);
-	map_sub_ = nh.subscribe("/orbSlam/mapNumber", 1, mapCallback);
-	loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);  
-	ros::spin();	
-	return 0;
+
+
+    ros::start();
+
+    ros::NodeHandle nh;
+    cam_sub_ = nh.subscribe<geometry_msgs::Pose>("/orbSlam/cameraRelativePose", 1, cameraPoseCallback);
+    map_sub_ = nh.subscribe("/orbSlam/mapNumber", 1, mapCallback);
+    loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);
+    ros::spin();
+    return 0;
 }

@@ -1579,7 +1579,6 @@ void Tracking::ResetLoad()
     mpKeyFrameDB->clear();
     cout << " done" << endl;
     // Clear Map (this erase MapPoints and KeyFrames)
-    //mpMap->clear();
     cout << "Map cleared" << endl;
     KeyFrame::nNextId = 0;
     Frame::nNextId = 0;

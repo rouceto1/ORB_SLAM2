@@ -56,44 +56,26 @@ class ImageGrabber
 
 int main(int argc, char **argv)
 {
-
-
     ros::init(argc, argv, "Mono");
     ros::start();
-
     if(argc != 3)
     {
         cerr << endl << "Usage: rosrun ORB_SLAM2 Mono path_to_vocabulary path_to_settings" << endl;
         ros::shutdown();
         return 1;
     }
-    // const clock_t begin_time = clock();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-
-
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::MONOCULAR,true, false, mapToLoad);
-
-    //std::cout << float( clock () - begin_time ) /  CLOCKS_PER_SEC << " this is time" << endl;
     ImageGrabber igb(&SLAM);
-    /*
-    // While( ros::OK (možná malý )
-    pak se jede ros:spin(Once) nebo tak nějak.
-    *
-    */
 
     ros::NodeHandle nodeHandler;
     ros::Subscriber sub = nodeHandler.subscribe("/stereo/left/image_raw", 1, &ImageGrabber::GrabImage,&igb);
     cam_pub_ = nodeHandler.advertise<geometry_msgs::Pose>("orbSlam/cameraRelativePose", 1);
     map_pub_ = nodeHandler.advertise<std_msgs::Int32>("/orbSlam/mapNumber",1);
     loc_pub_ = nodeHandler.advertise<std_msgs::Bool>("/orbSlam/localization",1);
-/*
-    while (ros::ok()) { 			//used so the loop continues untill ros is okay ( not called CTRL+C, or didnt crash....)
 
-        ros::spinOnce();
-    }
-  */  
-  ros::spin();
+    ros::spin();
 
     // Stop all threads
     SLAM.Shutdown();
@@ -143,10 +125,10 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
 
         cam_pub_.publish(pose);
 
-		
+
     }
-            numOfMap=mpSLAM->GetNumberOfMap();
-        loc_pub_.publish(stateLocalization);
-        map_pub_.publish(numOfMap);
+    numOfMap=mpSLAM->GetNumberOfMap();
+    loc_pub_.publish(stateLocalization);
+    map_pub_.publish(numOfMap);
 }
 

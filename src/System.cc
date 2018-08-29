@@ -36,6 +36,7 @@ bool endOfMaps = false;
 bool bUseViewerA;
 char fileTrajectory[100];
 bool onlyMaping = true;
+bool SlamIsOn = false;
 static bool has_suffix(const std::string &str, const std::string &suffix)
 {
     std::size_t index = str.find(suffix, str.size() - suffix.size());
@@ -96,10 +97,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     }
     cout << "Vocabulary loaded!" << endl << endl;
 
-
     //Create KeyFrame Database
     //Create the Map
-    //cout << "place one " << fileName << endl;
 
     cv::FileNode mapfilen = fsSettings["Map.mapfile"];									//get info about map names
     bool bReuseMap = false;
@@ -117,14 +116,13 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     if (!mapfile.empty() && LoadMap(fileName))
     {
-        //cout << "reuse map is true now " << endl;
         bReuseMap = true;
         sprintf(fileName,"%i%s",numOfMaps,mapfile.c_str());
         onlyMaping = false;
     }
     else
     {
-        cout << endl << "not loading shit we need to make new" << endl << endl;
+        cout << endl << "Not loading files we need to make new" << endl << endl;
         mpKeyFrameDatabase = new KeyFrameDatabase(mpVocabulary);
         mpMap = new Map();
         onlyMaping = true;
@@ -282,7 +280,6 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
         unique_lock<mutex> lock(mMutexMode);
         if(mbActivateLocalizationMode)
         {
-            cout << "shits here 1" << endl;
             mpLocalMapper->RequestStop();
             // Wait until Local Mapping has effectively stopped
             while(!mpLocalMapper->isStopped())
@@ -295,17 +292,17 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
         }
         if(mbDeactivateLocalizationMode)
         {
-            cout << "shits here 2" << endl;
             mpTracker->InformOnlyTracking(false);
             mpLocalMapper->Release();
             mbDeactivateLocalizationMode = false;
         }
     }
 
-    if (onlyMaping) {  //this goes on only if we adont have maps
+    if (onlyMaping) {  //this goes on only if we dont have maps
         {
+            //we save the map only if we had some done and we became lost
             unique_lock<mutex> lock(mMutexReset);
-            if(mbReset)
+            if(mbReset) //or resset button has been pressed
             {
                 if(!mpTracker->mbOnlyTracking) {
                     SaveMap(fileName);
@@ -319,40 +316,29 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
                 }
             }
         }
-
-
     } else {
 
-        // auto slam
+        // This part automaticly turns on slam if we have map
+        //slam can only be truned on after we know our place in map ref:1
         if(mpTracker->mbOnlyTracking ) {
-            //cout << "waiting for the settle " << trackingCountDelay << endl;
-
-            if(!mpMapDrawer->GetCurrentCameraPose().empty())
-            {
-                trackingCountDelay++;
-                cout << "waiting for the settle " << trackingCountDelay << endl;
+            if(!mpMapDrawer->GetCurrentCameraPose().empty()) {
+                trackingCountDelay++; //we cannot turn on the SLAM right away we localize ourselfs or else it might get us lost (due to our position not beeing robust enought)
+                //this also eliminates some of larger jumps in map
                 if (trackingCountDelay > 10) {
                     mpTracker->InformOnlyTracking(false);
                     mpLocalMapper->Release();
                     mbDeactivateLocalizationMode = false;
-                    cout << "And we are SLAMin" << endl;
-                    //trackingCountDelay = 0;
-                    //cout << "waiting for the settle " << trackingCountDelay << endl;
+                    cout << "Now we are SLAMin" << endl;
                 }
 
             }
         }
 
-        //cout << "we got KF:" << mpMap->KeyFramesInMap() << " and MP: " << mpMap->MapPointsInMap() <<endl;
-
-        // Check reset
+        //this part saves the new SLAMed map and loads the next one
         {
-
-
             unique_lock<mutex> lock(mMutexReset);
             if(mbReset && trackingCountDelay > 10)
             {
-                cout << "we are here Debug 1" << endl;
                 trackingCountDelay = 0;
                 if(!mpTracker->mbOnlyTracking) {
 
@@ -361,23 +347,23 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
                     SaveKeyFrameTrajectoryTUM(fileTrajectory);
                     numOfMaps++;
                     sprintf(fileName,"%i%s",numOfMaps,mapfile.c_str());
-                    cout << "reset map" << endl;
-                    mpTracker->ResetLoad(); // we obiously need to reset shit before load .....
+                    cout << "Reset map" << endl;
+                    mpTracker->ResetLoad(); // we obiously need to reset before load .....
                     mbReset = false;
 
-                    if (LoadMap(fileName)) { // not all here might be needed
-                        mpFrameDrawer->setMap(mpMap); // added with teh setter so mpFrameDrawer gets his new mpMap back
-                        mpMapDrawer ->setMap(mpMap); //needed
-                        mpMapDrawer->DelteCurrentCammeraPose();//needed
+                    if (LoadMap(fileName)) { 							// not all here might be needed
+                        mpFrameDrawer->setMap(mpMap); 					// added with teh setter so mpFrameDrawer gets his new mpMap back
+                        mpMapDrawer ->setMap(mpMap); 					//essential
+                        mpMapDrawer->DelteCurrentCammeraPose();			//essential
 
 
                         mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer, mpMap, mpKeyFrameDatabase, settings, mSensor, true);
-                        mpTracker->setMap(mpMap);//needed
+                        mpTracker->setMap(mpMap);						//essential
 
-                        mpLocalMapper->SetMap(mpMap);//needed
+                        mpLocalMapper->SetMap(mpMap);					//essential
 
                         mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,settings, true);
-                        mpTracker->SetViewer(mpViewer); //needed
+                        mpTracker->SetViewer(mpViewer); 				//essential
 
                         mpTracker->SetLocalMapper(mpLocalMapper);
                         mpTracker->SetLoopClosing(mpLoopCloser);
@@ -387,8 +373,7 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
                         mpLoopCloser->SetLocalMapper(mpLocalMapper);
                         mpLoopCloser->SetLocalMapper(mpLocalMapper);
                         mpTracker->InformOnlyTracking(true);
-                        cout << "We loaded and now we are trecking" << endl;
-                        //mpMapDrawer->DrawMapPoints();
+                        cout << "We loaded and now we are tracking" << endl; //after succesfull load we need to contine with tracking cos of ref:1
                     }
                 }
 
@@ -397,84 +382,6 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
             }
         }
     }
-    /*if(!mpMapDrawer->GetCurrentCameraPose().empty())
-    {
-
-
-        cv::Mat cameraPose = mpMapDrawer->GetCurrentCameraPose();
-        double  distCurrent = sqrt(pow(cameraPose.at<float>(0,3),2)+pow(cameraPose.at<float>(1,3),2)+pow(cameraPose.at<float>(2,3),2))+0.1; //dist calculated as pythagorian in space (why +0.1) ??
-        cout << "Distance Current: " << distCurrent << " Distancce loaded: " << distLoad << " Total distance: " << allMapLength << endl;
-        if(distCurrent > distLoad && distLoad > 0) {
-            if(mpTracker->mbOnlyTracking) {
-    			numOfMaps++;
-                sprintf(fileName,"%i%s",numOfMaps,mapfile.c_str());
-                cout << "reset map2" << endl;
-                if (LoadMap(fileName)) {
-
-
-    				delete mpMapDrawer;
-    				 delete mpTracker;
-    				 delete mpLocalMapper;
-    				 delete mpLoopCloser;
-    				 delete mpViewer;
-                    mpMapDrawer = new MapDrawer(mpMap, settings);
-                    mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer, mpMap, mpKeyFrameDatabase, settings, mSensor, true);
-                    mpLocalMapper = new LocalMapping(mpMap, mSensor==MONOCULAR);
-                    mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR);
-
-    				mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,settings, true);
-    				mpTracker->SetViewer(mpViewer);
-
-    				mpTracker->SetLocalMapper(mpLocalMapper);
-    				mpTracker->SetLoopClosing(mpLoopCloser);
-    				mpLocalMapper->SetTracker(mpTracker);
-    				mpLocalMapper->SetLoopCloser(mpLoopCloser);
-    				mpLoopCloser->SetTracker(mpTracker);
-    				mpLoopCloser->SetLocalMapper(mpLocalMapper);
-    				mpTracker->InformOnlyTracking(true);
-                }
-            }else{
-                //we crash here
-                //cout << "we are here Debug 2" << endl;
-                //sprintf(fileName,"%i%s",numOfMaps,mapfile.c_str());    //this is needed if we dont have prperly set settings file (Map.Mapfile is missing at the end) (see examples given in monocular)
-                //printf("%i%s",numOfMaps,mapfile.c_str());
-                SaveMap(fileName);
-                sprintf(fileTrajectory,"%iKeyFrameTrajectory.txt",numOfMaps);
-                SaveKeyFrameTrajectoryTUM(fileTrajectory);
-                numOfMaps++;
-                sprintf(fileName,"%i%s",numOfMaps,mapfile.c_str());
-                cout << "reset map1" << endl;
-                mpTracker->Reset();
-                mbReset = false;
-                //mpMapDrawer = new MapDrawer(mpMap, settings);
-                 if (LoadMap(fileName)) {
-    				 delete mpMapDrawer;
-    				 delete mpTracker;
-    				 delete mpLocalMapper;
-    				 delete mpLoopCloser;
-    				 delete mpViewer;
-                    mpMapDrawer = new MapDrawer(mpMap, settings);
-                    mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer, mpMap, mpKeyFrameDatabase, settings, mSensor, true);
-                    mpLocalMapper = new LocalMapping(mpMap, mSensor==MONOCULAR);
-                    mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR);
-
-    				mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,settings, true);
-    				mpTracker->SetViewer(mpViewer);
-
-    				mpTracker->SetLocalMapper(mpLocalMapper);
-    				mpTracker->SetLoopClosing(mpLoopCloser);
-    				mpLocalMapper->SetTracker(mpTracker);
-    				mpLocalMapper->SetLoopCloser(mpLoopCloser);
-    				mpLoopCloser->SetTracker(mpTracker);
-    				mpLoopCloser->SetLocalMapper(mpLocalMapper);
-    				mpTracker->InformOnlyTracking(false);
-                }
-                }
-        }
-
-    }*/
-
-
     cv::Mat Tcw = mpTracker->GrabImageMonocular(im,timestamp);
 
     unique_lock<mutex> lock2(mMutexState);
@@ -487,70 +394,6 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
 
 
 
-
-    /*		/// this part loads maps with ease but at the end wint localize again
-      	if(mpTracker->mbOnlyTracking && !endOfMaps){
-    	if(!mpMapDrawer->GetCurrentCameraPose().empty())
-    	{
-    		cv::Mat cameraPose = mpMapDrawer->GetCurrentCameraPose();
-    		double  distCurrent = sqrt(pow(cameraPose.at<float>(0,3),2)+pow(cameraPose.at<float>(1,3),2)+pow(cameraPose.at<float>(2,3),2))+0.15;
-    		cout << "Distance Current " << distCurrent << " Loaded " << distLoad << endl;
-    		if(distCurrent > distLoad && !secondRun){
-    			unique_lock<mutex> lock(mMutexReset);
-
-    			std::this_thread::sleep_for(std::chrono::microseconds(1000));
-    			numOfMaps++;
-    			sprintf(fileName,"%i%s",numOfMaps,mapfile.c_str());
-    			distCurrent=0;
-    			secondRun = true;
-
-
-    			if (LoadMap(fileName))
-    			{
-    				mpTracker->ResetLoad();
-    				mpMapDrawer = new MapDrawer(mpMap, settings);
-    				mpMapDrawer->DrawMapPoints();
-    			/*	bool bReuseMap=true;
-    				std::this_thread::sleep_for(std::chrono::microseconds(1000));
-    				//Create Drawers. These are used by the Viewer
-    	//			mpFrameDrawer = new FrameDrawer(mpMap, bReuseMap);
-    				mpMapDrawer = new MapDrawer(mpMap, settings);
-    		//		cout << " 2" << endl;
-    				//Initialize the Tracking thread
-    				//(it will live in the main thread of execution, the one that called this constructor)
-    				mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
-    						mpMap, mpKeyFrameDatabase, settings, mSensor, bReuseMap);
-    		//		cout << " 3" << endl;
-    				//Initialize the Local Mapping thread and launch
-    				mpLocalMapper = new LocalMapping(mpMap, mSensor==MONOCULAR);
-    	//			mptLocalMapping = new thread(&ORB_SLAM2::LocalMapping::Run,mpLocalMapper);
-    		//		cout << "4 " << endl;
-    				//Initialize the Loop Closing thread and launch
-    				mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR);
-    			//	mptLoopClosing = new thread(&ORB_SLAM2::LoopClosing::Run, mpLoopCloser);
-    		//		cout << " 5" << endl;
-    				//Initialize the Viewer thread and launch
-    				mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,settings, bReuseMap);
-    				mpTracker->SetViewer(mpViewer);
-    		//		cout << "6" << endl;
-    				//Set pointers between threads
-    				mpTracker->SetLocalMapper(mpLocalMapper);
-    				mpTracker->SetLoopClosing(mpLoopCloser);
-    		//		cout << "7" << endl;
-    				mpLocalMapper->SetTracker(mpTracker);
-    				mpLocalMapper->SetLoopCloser(mpLoopCloser);
-    		//		cout << "8" << endl;
-    				mpLoopCloser->SetTracker(mpTracker);
-    				mpLoopCloser->SetLocalMapper(mpLocalMapper);
-    				mpTracker->InformOnlyTracking(true);
-    				distCurrent=0;
-
-    			}else {
-    				endOfMaps = true;
-    			}
-    		}
-    	}
-    }*/
     return Tcw;
 }
 vector<cv::Mat> System::LoadedMapKeyFrames()
@@ -617,7 +460,7 @@ void System::Reset()
 
 void System::Shutdown()
 {
-	
+
     mpLocalMapper->RequestFinish();
     mpLoopCloser->RequestFinish();
     if(mpViewer)
@@ -628,13 +471,13 @@ void System::Shutdown()
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
         }
     }
-	
+
     // Wait until all thread have effectively stopped
     while(!mpLocalMapper->isFinished() || !mpLoopCloser->isFinished() || mpLoopCloser->isRunningGBA())
     {
         std::this_thread::sleep_for(std::chrono::microseconds(5000));
     }
-    
+
     if(mpViewer)
         //pangolin::BindToContext("ORB-SLAM2: Map Viewer");
         cout << "we are shutting down" << endl;
@@ -790,7 +633,6 @@ void System::SaveTrajectoryKITTI(const string &filename)
 
         while(pKF->isBad())
         {
-            //  cout << "bad parent" << endl;
             Trw = Trw*pKF->mTcp;
             pKF = pKF->GetParent();
         }
@@ -851,7 +693,6 @@ void System::SaveMap(const string &filename)
 
 bool System::LoadMap(const string &filename)
 {
-    //cout << "We are triing to load some shit called " << filename << std::endl;
     std::ifstream in(filename, std::ios_base::binary);
     if (!in)
     {
@@ -872,7 +713,6 @@ bool System::LoadMap(const string &filename)
     sort(vpKFS.begin(),vpKFS.end(),KeyFrame::lId);
     int index = vpKFS.size();
     last=vpKFS[index-1]->GetPose();
-    //cout << "Mapa " << last << endl;
     distLoad=0;
     distLoad = sqrt(pow(last.at<float>(0,3),2)+pow(last.at<float>(1,3),2)+pow(last.at<float>(2,3),2));
     allMapLength += distLoad;											//rev 1 (we will still need total length anyway)

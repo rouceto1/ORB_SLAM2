@@ -117,17 +117,10 @@ long unsigned int Map::GetMaxKFid()
 
 void Map::clear()
 {
-	cout << "do we crash here?? a" << endl;
+	
     for(set<MapPoint*>::iterator sit=mspMapPoints.begin(), send=mspMapPoints.end(); sit!=send; sit++)
         delete *sit;
-        
-	cout << "do we crash here?? b" << endl;
-	
-    /*for(set<KeyFrame*>::iterator sit=mspKeyFrames.begin(), send=mspKeyFrames.end(); sit!=send; sit++)
-        delete *sit;
-*/
 
-	cout << "do we crash here?? c" << endl;
     mspMapPoints.clear();
     mspKeyFrames.clear();
     mnMaxKFid = 0;

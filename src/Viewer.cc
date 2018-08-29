@@ -129,7 +129,6 @@ void Viewer::Run()
         mpMapDrawer->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph)
             mpMapDrawer->DrawKeyFrames(menuShowKeyFrames,menuShowGraph);
-        //cout << "we got mp:" ;
         if(menuShowPoints)
             mpMapDrawer->DrawMapPoints();
          
