@@ -385,6 +385,7 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
                         mpLocalMapper->SetLoopCloser(mpLoopCloser);
                         mpLoopCloser->SetTracker(mpTracker);
                         mpLoopCloser->SetLocalMapper(mpLocalMapper);
+                        mpLoopCloser->SetLocalMapper(mpLocalMapper);
                         mpTracker->InformOnlyTracking(true);
                         cout << "We loaded and now we are trecking" << endl;
                         //mpMapDrawer->DrawMapPoints();
@@ -616,6 +617,7 @@ void System::Reset()
 
 void System::Shutdown()
 {
+	
     mpLocalMapper->RequestFinish();
     mpLoopCloser->RequestFinish();
     if(mpViewer)
@@ -626,14 +628,16 @@ void System::Shutdown()
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
         }
     }
-
+	
     // Wait until all thread have effectively stopped
     while(!mpLocalMapper->isFinished() || !mpLoopCloser->isFinished() || mpLoopCloser->isRunningGBA())
     {
         std::this_thread::sleep_for(std::chrono::microseconds(5000));
     }
+    
     if(mpViewer)
-        pangolin::BindToContext("ORB-SLAM2: Map Viewer");
+        //pangolin::BindToContext("ORB-SLAM2: Map Viewer");
+        cout << "we are shutting down" << endl;
     if (is_save_map) {
 
         if(!mpTracker->mbOnlyTracking) {

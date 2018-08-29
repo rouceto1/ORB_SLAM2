@@ -74,7 +74,7 @@ void localCallback(const std_msgs::Bool::ConstPtr& msg)
 //Find Carrot point pased on keyframes a current camera pose
 void cameraPoseCallback(const geometry_msgs::Pose::ConstPtr& msg)
 {
-	std::cout << "cameraPoseCallback in carrot contbroller" << std::endl;
+	//std::cout << "cameraPoseCallback in carrot contbroller" << std::endl;
 
 	if(localization){
 		if(wait){
@@ -125,6 +125,7 @@ void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 			LoadMap(mapNumber);
 			wait=true;
 			mapChanged=mapNumber;
+			cout << "carrot is in map " << mapNumber <<endl;
 		}
 	}
 }

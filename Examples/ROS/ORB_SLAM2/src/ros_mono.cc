@@ -145,6 +145,7 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
         numOfMap=mpSLAM->GetNumberOfMap();
         loc_pub_.publish(stateLocalization);
         map_pub_.publish(numOfMap);
+		
     }
 }
 

@@ -76,6 +76,7 @@ bool userStop = false;
 bool localization=false;
 int mapNumberSave=1;
 int mapNumber;
+int mapCount = 0;
 bool inMap=false;
 
 
@@ -155,13 +156,22 @@ void loadPath(int index)
         forwardS.push_back(path[2*i]);
         angularS.push_back(path[2*i+1]);
     }
+    //cout << "we laodaed path " << fileName << endl;
+    inMap = false;
 }
 
 void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 {
+	
     unique_lock<mutex> lock2(minMapState);
     mapNumber=msg->data;
-    inMap=true;
+    if (mapNumber == mapCount){
+		inMap=true;
+		mapCount++;
+	} else {
+		mapCount++;
+	}
+    
 }
 
 
@@ -184,7 +194,7 @@ int main(int argc, char **argv)
 
     nh.param("forwardAcceleration", maxForwardAcceleration, 0.01);
 
-    vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmd",1);
+    vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmda",1);
     joy_sub_ = nh.subscribe<sensor_msgs::Joy>("/joy", 10, joyCallback);
     map_sub_ = nh.subscribe<std_msgs::Int32>("/orbSlam/mapNumber",1,mapCallback);
     loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);
@@ -218,6 +228,8 @@ int main(int argc, char **argv)
             }
         } else {
             /* Load */
+            
+            //cout << " we hope we are at load" << endl;
             if(inMap) {
                 //Find Transform between robot and carrot point
                 tf::StampedTransform transform;
@@ -225,7 +237,7 @@ int main(int argc, char **argv)
                 {
                     ros::Time now=ros::Time::now();
                     listener.waitForTransform("Carrot", "Robot",
-                                              now, ros::Duration(1.0));
+                                              now, ros::Duration(100.0));
                     listener.lookupTransform("Carrot", "Robot",
                                              now, transform);
                 }
@@ -239,6 +251,7 @@ int main(int argc, char **argv)
                 twist.linear.x = 0.2 * sqrt(pow(transform.getOrigin().x(), 2) +	pow(transform.getOrigin().z(), 2));
                 cout << "Twist forward " << twist.linear.x << " Twist angular " << twist.angular.z << endl;
                 vel_pub_.publish(twist);
+                cout << twist << endl;
             } else {
                 loadPath(mapNumber);
                 for(unsigned int i=0; i<forwardS.size(); i++) {
@@ -249,6 +262,7 @@ int main(int argc, char **argv)
                         twist.linear.x=forwardS[i];
                         twist.angular.z=angularS[i];
                         vel_pub_.publish(twist);
+                        //cout << twist << endl;
                     }
 
                 }
