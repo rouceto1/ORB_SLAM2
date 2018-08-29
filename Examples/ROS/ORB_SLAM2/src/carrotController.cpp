@@ -70,13 +70,14 @@ void LoadMap(int index)
 void localCallback(const std_msgs::Bool::ConstPtr& msg)
 {
 	localization=msg->data;
+	//cout << localization << "  hej  " << msg->data <<endl;
 }
 //Find Carrot point pased on keyframes a current camera pose
 void cameraPoseCallback(const geometry_msgs::Pose::ConstPtr& msg)
 {
 	//std::cout << "cameraPoseCallback in carrot contbroller" << std::endl;
 
-	if(localization){
+	if(!localization){
 		if(wait){
 			r_x=msg->position.x;
 			r_y=msg->position.y;
@@ -132,7 +133,9 @@ void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 
 int main(int argc, char **argv)
 {
-	cout << "carrot controll ready" << endl;
+	cout << "carrot controll init.......";
+	usleep(400000);
+    cout << "ready" << endl;
 	ros::init(argc, argv, "Carrot");
 	ros::start();
 

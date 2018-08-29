@@ -17,6 +17,7 @@ geometry_msgs::Twist twist;
 ros::Publisher vel_pub_;
 ros::Subscriber loc_sub_;
 ros::Subscriber map_sub_;
+ros::Subscriber joy_sub_;
 vector<float> path;
 vector<float> forwardS;
 vector<float> angularS;
@@ -59,7 +60,7 @@ double maxAngularSpeed = 0.2;
 double maxFlipperSpeed = 0.2;
 double maxForwardAcceleration = 0.01;
 /*listening to joystick and flipperVelocity, publishing commands*/
-ros::Subscriber joy_sub_;
+
 
 geometry_msgs::Twist lastTwist;
 double forwardAcceleration= 0;
@@ -73,7 +74,7 @@ float distanceTotalEvent=0;
 float distanceTravelled=0;
 float flipperPosition=0;
 bool userStop = false;
-bool localization=false;
+bool localization;
 int mapNumberSave=1;
 int currentPanthNumber = 0;
 int mapNumber;
@@ -82,7 +83,8 @@ bool inMap=false;
 
 // work in progress varables:
 bool weShouldBeCapturingJoystick = false;
-
+unsigned int i = 0;
+bool newFileLoaded = false;
 
 
 std::mutex minMapState;
@@ -93,7 +95,7 @@ void joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
     forwardAcceleration = maxForwardAcceleration*joy->axes[linearAxis];;
     if  (joy->buttons[stopButton] || joy->buttons[pauseButton]) angularSpeed = forwardSpeed = flipperSpeed = 0;
     if  (joy->buttons[stopButton]) userStop = true;
-    
+
     ROS_DEBUG("Joystick pressed");
 
     if ( cotrollerTest) {
@@ -144,10 +146,7 @@ void savePath(int index)
     inMap=false;
 }
 
-void localCallback(const std_msgs::Bool::ConstPtr& msg)
-{
-    localization=msg->data;
-}
+
 bool fileExists (const std::string& name) {
     ifstream f(name.c_str());
     return f.good();
@@ -155,11 +154,13 @@ bool fileExists (const std::string& name) {
 bool loadPath(int index)
 {
     char fileName[1000];
+    currentPanthNumber++;
     sprintf(fileName,"%iPathProfile.yaml",index);
-    if (!fileExists(fileName)){
-		cout << "Failed to load " << fileName << " you better make one" << endl;
-		return false;
-	}
+    if (!fileExists(fileName)) {
+        cout << "Failed to load " << fileName << " you better make one" << endl;
+        currentPanthNumber--;
+        return false;
+    }
 	
     ROS_DEBUG("Loading %iPathProfile.yaml",index);
     cout << "Loading path " << fileName;
@@ -181,6 +182,7 @@ bool loadPath(int index)
     }
     //cout << "we laodaed path " << fileName << endl;
     inMap = false;
+    newFileLoaded = true;
     return true;
 }
 
@@ -197,11 +199,18 @@ void mapCallback(const std_msgs::Int32::ConstPtr& msg)
     }
 
 }
+void localCallback(const std_msgs::Bool::ConstPtr& msg)
+{
+    localization=msg->data;
+   // cout << localization << "  hej  " << msg->data <<endl;
+}
 
 
 int main(int argc, char **argv)
 {
-    cout << "carrot drive ready" << endl;
+	cout << "carrot drive init.......";
+	usleep(400000);
+    cout << "ready" << endl;
     ros::init(argc, argv, "CarrotDrive");
     ros::start();
     ros::NodeHandle nh;
@@ -220,19 +229,20 @@ int main(int argc, char **argv)
     nh.param("forwardAcceleration", maxForwardAcceleration, 0.01);
 
     vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmda",10000);
+    loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);  
     joy_sub_ = nh.subscribe<sensor_msgs::Joy>("/joy", 10, joyCallback);
     map_sub_ = nh.subscribe<std_msgs::Int32>("/orbSlam/mapNumber",1,mapCallback);
-    loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);
+	
     tf::TransformListener listener;
-	weShouldBeCapturingJoystick = !loadPath(currentPanthNumber);
+    weShouldBeCapturingJoystick = !loadPath(currentPanthNumber);
     while (ros::ok()) {
 
 
-
+		//std::cout << localization << "     "     <<  mapCallback  <<endl;
 
         if (weShouldBeCapturingJoystick) {
             /* new save mode */
-			//cout << "are we at save mode" << endl;
+            //cout << "are we at save mode" << endl;
             // this part calculates and publises to the twist topic so we know the direction we should be heading to
             forwardSpeed += forwardAcceleration;
             forwardSpeed = fmin(fmax(forwardSpeed,-maxForwardSpeed),maxForwardSpeed);
@@ -262,124 +272,45 @@ int main(int argc, char **argv)
             //now we should already have old file of this place in path
 
             //we should find out if we should go by optical shit or joystick shit
-
-            if (localization){
+			
+            if (!localization) {
 
                 //Find Transform between robot and carrot point
                 tf::StampedTransform transform;
                 try
                 {
                     ros::Time now=ros::Time::now();
-                    listener.waitForTransform("Carrot", "Robot",
-                    now, ros::Duration(100.0));
-                    listener.lookupTransform("Carrot", "Robot",
-                    now, transform);
+                    listener.waitForTransform("Carrot", "Robot", now, ros::Duration(1.0));
+                    listener.lookupTransform("Carrot", "Robot", now, transform);
                 }
                 catch (tf::TransformException &ex) {
                     ROS_ERROR("%s",ex.what());
-                    ros::Duration(1.0).sleep();
+                    //ros::Duration(1.0).sleep();
+                    ros::spinOnce();
                     continue;
                 }
                 //Controlling the the angular and forward speed depending on the transform
                 twist.angular.z = 0.3 * transform.getOrigin().x();
                 twist.linear.x = 0.2 * sqrt(pow(transform.getOrigin().x(), 2) +	pow(transform.getOrigin().z(), 2));
-                //cout << "Twist forward " << twist.linear.x << " Twist angular " << twist.angular.z << endl;
                 vel_pub_.publish(twist);
             } else {
-            /* new load mode*/
-				
-				currentPanthNumber++;	
-				if (!loadPath(currentPanthNumber)){
-					weShouldBeCapturingJoystick = true;
+                /* new load mode*/
+
+                if (forwardS.size() == i ) {
+                    i = 0;
+                    newFileLoaded = false;
+                    loadPath(currentPanthNumber);
+                }
+                if (newFileLoaded) {
+                twist.linear.x=forwardS[i];
+                twist.angular.z=angularS[i];
+                vel_pub_.publish(twist);
+                i++;
 				}
-				for(unsigned int i=0; i<forwardS.size(); i++) {
-                    if(localization) {
-                        break;
-                    } else {
-                        twist.linear.x=forwardS[i];
-                        twist.angular.z=angularS[i];
-                        vel_pub_.publish(twist);
-                        //cout << twist << endl;
-                    }
-
-                }
-            //we should check what was the last path we loaded and if it is not the last map the main part is in we should load another
+                //we should check what was the last path we loaded and if it is not the last map the main part is in we should load another
             }
 
         }
-
-
-
-
-/*
-        //std::cout <<forwardSpeed << "  " << forwardAcceleration<< " "<<angularSpeed << endl;
-        std::cout << localization << endl;
-        if(!localization) {
-            
-
-            forwardSpeed += forwardAcceleration;
-            forwardSpeed = fmin(fmax(forwardSpeed,-maxForwardSpeed),maxForwardSpeed);
-            twist.linear.x =  forwardSpeed;
-            angularSpeed = fmin(fmax(angularSpeed,-maxAngularSpeed),maxAngularSpeed);
-            twist.angular.z =  angularSpeed;;
-            vel_pub_.publish(twist);
-            //Save path profile
-            if (lastForwardSpeed != forwardSpeed || lastAngularSpeed != angularSpeed) {
-                lastForwardSpeed = forwardSpeed;
-                lastAngularSpeed = angularSpeed;
-
-                path.push_back(forwardSpeed);
-                path.push_back(angularSpeed);
-            }
-            if(inMap) {
-                savePath(mapNumberSave);
-                //	if(!path.empty()) cout << "Save me" << endl;
-                mapNumberSave=mapNumber+1;
-                inMap=false;
-
-            }
-        } else {
-           
-            //cout << " we hope we are at load" << endl;
-            if(inMap) {
-                //Find Transform between robot and carrot point
-                tf::StampedTransform transform;
-                try
-                {
-                    ros::Time now=ros::Time::now();
-                    listener.waitForTransform("Carrot", "Robot",
-                                              now, ros::Duration(100.0));
-                    listener.lookupTransform("Carrot", "Robot",
-                                             now, transform);
-                }
-                catch (tf::TransformException &ex) {
-                    ROS_ERROR("%s",ex.what());
-                    ros::Duration(1.0).sleep();
-                    continue;
-                }
-                //Controlling the the angular and forward speed
-                twist.angular.z = 0.3 * transform.getOrigin().x();
-                twist.linear.x = 0.2 * sqrt(pow(transform.getOrigin().x(), 2) +	pow(transform.getOrigin().z(), 2));
-                cout << "Twist forward " << twist.linear.x << " Twist angular " << twist.angular.z << endl;
-                vel_pub_.publish(twist);
-                cout << twist << endl;
-            } else {
-                loadPath(mapNumber);
-                for(unsigned int i=0; i<forwardS.size(); i++) {
-                    if(inMap) {
-                        mapNumber++;
-                        break;
-                    } else {
-                        twist.linear.x=forwardS[i];
-                        twist.angular.z=angularS[i];
-                        vel_pub_.publish(twist);
-                        //cout << twist << endl;
-                    }
-
-                }
-            }
-        }
-        */
         ros::spinOnce();
         usleep(1000);
     }
