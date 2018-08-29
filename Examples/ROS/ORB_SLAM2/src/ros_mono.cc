@@ -142,10 +142,11 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
         bro.sendTransform(tf::StampedTransform(transfor, ros::Time::now(), "World", "Robot"));
 
         cam_pub_.publish(pose);
-        numOfMap=mpSLAM->GetNumberOfMap();
-        loc_pub_.publish(stateLocalization);
-        map_pub_.publish(numOfMap);
+
 		
     }
+            numOfMap=mpSLAM->GetNumberOfMap();
+        loc_pub_.publish(stateLocalization);
+        map_pub_.publish(numOfMap);
 }
 

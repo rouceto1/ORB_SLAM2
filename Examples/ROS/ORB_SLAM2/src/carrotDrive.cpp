@@ -23,36 +23,36 @@ vector<float> angularS;
 
 // Joystick maping (might need some changes depending on device:
 
-    int leftStickLR = 0; //vals from "1" left to "-1" right "0" at rest
-    int leftStickUD = 1;	//vals from "1" up to "-1" down "0" at rest
-    int rightStickLR = 2; //vals from "1" left to "-1" right "0" at rest
-    int rightStickUD = 3; //vals from "1" up to "-1" down "0" at rest
-    int RB = 4; //vals from "1" unpressed to "-1" pressed all the way
-    int LB = 5; //vals from "1" unpressed to "-1" pressed all the way
-    int crossLR = 6; // left is "1" right is "-1"
-    int crossUD = 7; // up is "1" down is "-1"
+int leftStickLR = 0; //vals from "1" left to "-1" right "0" at rest
+int leftStickUD = 1;	//vals from "1" up to "-1" down "0" at rest
+int rightStickLR = 2; //vals from "1" left to "-1" right "0" at rest
+int rightStickUD = 3; //vals from "1" up to "-1" down "0" at rest
+int RB = 4; //vals from "1" unpressed to "-1" pressed all the way
+int LB = 5; //vals from "1" unpressed to "-1" pressed all the way
+int crossLR = 6; // left is "1" right is "-1"
+int crossUD = 7; // up is "1" down is "-1"
 
-    int LT = 4;
-    int L3 = 8;
-    int RT = 5;
-    int R3 = 9;
+int LT = 4;
+int L3 = 8;
+int RT = 5;
+int R3 = 9;
 
-    int start = 6; //left special
-    int menu = 7; //right special
-    int X = 2;
-    int Y = 3;
-    int A = 0;
-    int B = 1;
+int start = 6; //left special
+int menu = 7; //right special
+int X = 2;
+int Y = 3;
+int A = 0;
+int B = 1;
 
-    bool cotrollerTest = true;
+bool cotrollerTest = false;
 
 
 /*joystick input parameters - axes that correspond to forward, turning and flipper speeds*/
-int stopButton = B;
-int pauseButton = A;
-int linearAxis = leftStickUD;
-int angularAxis = leftStickLR;
-int flipperAxis = rightStickUD; //no clue how is it supposed to be controled (prolly joystick) 
+int stopButton;
+int pauseButton;
+int linearAxis;
+int angularAxis;
+int flipperAxis; //no clue how is it supposed to be controled (prolly joystick)
 /*these constants determine how quickly the robot moves based on the joystick input*/
 double maxForwardSpeed = 0.2;
 double maxAngularSpeed = 0.2;
@@ -75,9 +75,13 @@ float flipperPosition=0;
 bool userStop = false;
 bool localization=false;
 int mapNumberSave=1;
+int currentPanthNumber = 0;
 int mapNumber;
 int mapCount = 0;
 bool inMap=false;
+
+// work in progress varables:
+bool weShouldBeCapturingJoystick = false;
 
 
 
@@ -89,6 +93,7 @@ void joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
     forwardAcceleration = maxForwardAcceleration*joy->axes[linearAxis];;
     if  (joy->buttons[stopButton] || joy->buttons[pauseButton]) angularSpeed = forwardSpeed = flipperSpeed = 0;
     if  (joy->buttons[stopButton]) userStop = true;
+    
     ROS_DEBUG("Joystick pressed");
 
     if ( cotrollerTest) {
@@ -125,11 +130,17 @@ void savePath(int index)
         char fileName[1000];
         sprintf(fileName,"%iPathProfile.yaml",index);
         ROS_DEBUG("Saving %iPathProfile.yaml",index);
+        cout << "Saving path " << fileName;
         FileStorage pfs(fileName,FileStorage::WRITE);
+        cout << "   .";
         write(pfs, "Path", path);
+        cout << ".";
         pfs.release();
+        cout << ".";
         path.clear();
+        cout << "done" << endl;
     }
+    userStop = false;
     inMap=false;
 }
 
@@ -137,41 +148,54 @@ void localCallback(const std_msgs::Bool::ConstPtr& msg)
 {
     localization=msg->data;
 }
-
-void loadPath(int index)
+bool fileExists (const std::string& name) {
+    ifstream f(name.c_str());
+    return f.good();
+}
+bool loadPath(int index)
 {
     char fileName[1000];
     sprintf(fileName,"%iPathProfile.yaml",index);
+    if (!fileExists(fileName)){
+		cout << "Failed to load " << fileName << " you better make one" << endl;
+		return false;
+	}
+	
     ROS_DEBUG("Loading %iPathProfile.yaml",index);
+    cout << "Loading path " << fileName;
     FileStorage fsp(fileName, FileStorage::READ);
+    cout << "   .";
     path.clear();
+    cout << ".";
     forwardS.clear();
+    cout << ".";
     angularS.clear();
     if(fsp.isOpened()) {
         fsp["Path"]>>path;
         fsp.release();
     }
-
+    cout << "done" << endl;
     for(unsigned int i=0; i<path.size()/2; i++) {
         forwardS.push_back(path[2*i]);
         angularS.push_back(path[2*i+1]);
     }
     //cout << "we laodaed path " << fileName << endl;
     inMap = false;
+    return true;
 }
 
 void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 {
-	
+
     unique_lock<mutex> lock2(minMapState);
     mapNumber=msg->data;
-    if (mapNumber == mapCount){
-		inMap=true;
-		mapCount++;
-	} else {
-		mapCount++;
-	}
-    
+    if (mapNumber == mapCount) {
+        inMap=true;
+        mapCount++;
+    } else {
+        mapCount++;
+    }
+
 }
 
 
@@ -182,11 +206,12 @@ int main(int argc, char **argv)
     ros::start();
     ros::NodeHandle nh;
     /* joystick params */
-    nh.param("axis_linear", linearAxis, 1);
-    nh.param("axis_angular", angularAxis, 0);
-    nh.param("axis_flipper", flipperAxis, 4);
-    nh.param("stopButton", stopButton, 2);
-    nh.param("pauseButton", pauseButton, 0);
+    nh.param("axis_linear", linearAxis, leftStickUD);
+    nh.param("axis_angular", angularAxis, leftStickLR);
+    nh.param("axis_flipper", flipperAxis, rightStickUD);
+    nh.param("stopButton", stopButton, B);
+    nh.param("pauseButton", pauseButton, A);
+
 
     /* robot speed limits */
     nh.param("angularSpeed", maxAngularSpeed, 0.2);
@@ -194,17 +219,104 @@ int main(int argc, char **argv)
 
     nh.param("forwardAcceleration", maxForwardAcceleration, 0.01);
 
-    vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmda",1);
+    vel_pub_ = nh.advertise<geometry_msgs::Twist>("cmda",10000);
     joy_sub_ = nh.subscribe<sensor_msgs::Joy>("/joy", 10, joyCallback);
     map_sub_ = nh.subscribe<std_msgs::Int32>("/orbSlam/mapNumber",1,mapCallback);
     loc_sub_ = nh.subscribe<std_msgs::Bool>("/orbSlam/localization",1,localCallback);
     tf::TransformListener listener;
-
+	weShouldBeCapturingJoystick = !loadPath(currentPanthNumber);
     while (ros::ok()) {
-        /*Save mode */
+
+
+
+
+        if (weShouldBeCapturingJoystick) {
+            /* new save mode */
+			//cout << "are we at save mode" << endl;
+            // this part calculates and publises to the twist topic so we know the direction we should be heading to
+            forwardSpeed += forwardAcceleration;
+            forwardSpeed = fmin(fmax(forwardSpeed,-maxForwardSpeed),maxForwardSpeed);
+            twist.linear.x =  forwardSpeed;
+            angularSpeed = fmin(fmax(angularSpeed,-maxAngularSpeed),maxAngularSpeed);
+            twist.angular.z =  angularSpeed;;
+            vel_pub_.publish(twist);
+
+            //looks if speed or angel changed form last save (we just save the differences rather then whole thing)
+            if (lastForwardSpeed != forwardSpeed || lastAngularSpeed != angularSpeed) {
+                lastForwardSpeed = forwardSpeed;
+                lastAngularSpeed = angularSpeed;
+
+                //saves path pieece into path. vector
+                path.push_back(forwardSpeed);
+                path.push_back(angularSpeed);
+            }
+
+            //if user requests stop we should save the map
+            if (userStop) {
+                savePath(currentPanthNumber);
+                currentPanthNumber++;
+            }
+
+
+        } else {
+            //now we should already have old file of this place in path
+
+            //we should find out if we should go by optical shit or joystick shit
+
+            if (localization){
+
+                //Find Transform between robot and carrot point
+                tf::StampedTransform transform;
+                try
+                {
+                    ros::Time now=ros::Time::now();
+                    listener.waitForTransform("Carrot", "Robot",
+                    now, ros::Duration(100.0));
+                    listener.lookupTransform("Carrot", "Robot",
+                    now, transform);
+                }
+                catch (tf::TransformException &ex) {
+                    ROS_ERROR("%s",ex.what());
+                    ros::Duration(1.0).sleep();
+                    continue;
+                }
+                //Controlling the the angular and forward speed depending on the transform
+                twist.angular.z = 0.3 * transform.getOrigin().x();
+                twist.linear.x = 0.2 * sqrt(pow(transform.getOrigin().x(), 2) +	pow(transform.getOrigin().z(), 2));
+                //cout << "Twist forward " << twist.linear.x << " Twist angular " << twist.angular.z << endl;
+                vel_pub_.publish(twist);
+            } else {
+            /* new load mode*/
+				
+				currentPanthNumber++;	
+				if (!loadPath(currentPanthNumber)){
+					weShouldBeCapturingJoystick = true;
+				}
+				for(unsigned int i=0; i<forwardS.size(); i++) {
+                    if(localization) {
+                        break;
+                    } else {
+                        twist.linear.x=forwardS[i];
+                        twist.angular.z=angularS[i];
+                        vel_pub_.publish(twist);
+                        //cout << twist << endl;
+                    }
+
+                }
+            //we should check what was the last path we loaded and if it is not the last map the main part is in we should load another
+            }
+
+        }
+
+
+
+
+/*
         //std::cout <<forwardSpeed << "  " << forwardAcceleration<< " "<<angularSpeed << endl;
+        std::cout << localization << endl;
         if(!localization) {
-            //	* speed limits *
+            
+
             forwardSpeed += forwardAcceleration;
             forwardSpeed = fmin(fmax(forwardSpeed,-maxForwardSpeed),maxForwardSpeed);
             twist.linear.x =  forwardSpeed;
@@ -227,8 +339,7 @@ int main(int argc, char **argv)
 
             }
         } else {
-            /* Load */
-            
+           
             //cout << " we hope we are at load" << endl;
             if(inMap) {
                 //Find Transform between robot and carrot point
@@ -268,6 +379,7 @@ int main(int argc, char **argv)
                 }
             }
         }
+        */
         ros::spinOnce();
         usleep(1000);
     }
