@@ -82,8 +82,7 @@ int mapCount = 0;
 
 // work in progress varables:
 bool weShouldBeCapturingJoystick = false;
-unsigned int i = 0;
-bool newFileLoaded = false;
+bool mapHasBeenChanged = false;
 
 
 std::mutex minMapState;
@@ -205,11 +204,12 @@ void mapCallback(const std_msgs::Int32::ConstPtr& msg)
 
     unique_lock<mutex> lock2(minMapState);
     mapNumber=msg->data;
-    if (mapNumber == mapCount) {
+    
+    
+    if (mapNumber != mapCount) {
         mapCount++;
-    } else {
-        mapCount++;
-    }
+        mapHasBeenChanged = true;
+    } 
 
 }
 void localCallback(const std_msgs::Bool::ConstPtr& msg)
@@ -307,17 +307,18 @@ int main(int argc, char **argv)
             } else {
                 /* Load mode*/
 
-                if (forwardS.size() == i ) { //we load new map when we published all the previous ones
-                    i = 0;
-                    newFileLoaded = false;
+                if (mapHasBeenChanged) { //we load new map when we published all the previous ones
+                    mapHasBeenChanged = false;
                     loadPath(currentPanthNumber);
+                    for(unsigned int i = 0, i < forwardS.size(), i++) {
+						 twist.linear.x=forwardS[i];
+						twist.angular.z=angularS[i];
+						vel_pub_.publish(twist); //publishing old path
+						
+					}
+					cout << "finished loading path: " << mapCount  << endl;
                 }
-                if (newFileLoaded) {
-                    twist.linear.x=forwardS[i];
-                    twist.angular.z=angularS[i];
-                    vel_pub_.publish(twist); //publishing old path
-                    i++;
-                }
+
 
             }
 
