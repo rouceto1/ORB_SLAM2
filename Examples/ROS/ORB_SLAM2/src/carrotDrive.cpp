@@ -78,7 +78,7 @@ bool knownPosition;
 int mapNumberSave=1;
 int currentPanthNumber = 0;
 int mapNumber;
-int mapCount = 0;
+int mapCount = 1;
 
 // work in progress varables:
 bool weShouldBeCapturingJoystick = false;
@@ -276,10 +276,11 @@ int main(int argc, char **argv)
             }
 
             //if user requests stop we should save the map
-            if (userStop) {
+            if (userStop || mapHasBeenChanged) {
                 savePath(currentPanthNumber);
                 currentPanthNumber++;
             }
+            
 
 
         } else {
